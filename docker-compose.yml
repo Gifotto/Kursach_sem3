@@ -1,0 +1,23 @@
+services:
+  db:
+    image: postgres:16
+    container_name: sudoku_db
+    restart: unless-stopped          # контейнер сам поднимается после перезагрузки компьютера
+    environment:
+      POSTGRES_USER: sudoku
+      POSTGRES_PASSWORD: sudoku
+      POSTGRES_DB: sudoku
+    ports:
+      - "5432:5432"
+    volumes:
+      - sudoku_data:/var/lib/postgresql/data
+      # при создании нового тома схема из init.sql применяется автоматически
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:                     # "up --wait" ждёт, пока база реально готова принимать запросы
+      test: ["CMD-SHELL", "pg_isready -U sudoku -d sudoku"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+volumes:
+  sudoku_data:
+ 
