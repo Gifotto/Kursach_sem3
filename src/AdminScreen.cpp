@@ -6,6 +6,7 @@ static const int kVisibleRows = 12;  // строк в таблице без пр
 
 void AdminScreen::onEnter() {
     selUser = selGame = scrollUsers = scrollGames = 0;
+    showLog = false;
     valueA.text.clear();
     valueB.text.clear();
     levels = app.db.difficulties();
@@ -18,20 +19,26 @@ void AdminScreen::reload() {
     // если выбранный пользователь исчез (удалён) — сбрасываем выбор
     bool found = std::any_of(users.begin(), users.end(), [&](auto& r) { return std::stoi(r[0]) == selUser; });
     if (!found) selUser = 0;
-    games = selUser ? app.db.adminGames(selUser) : Rows{};
+    loadDetails();
     found = std::any_of(games.begin(), games.end(), [&](auto& r) { return std::stoi(r[0]) == selGame; });
     if (!found) selGame = 0;
+}
+
+void AdminScreen::loadDetails() {
+    games = selUser ? app.db.adminGames(selUser) : Rows{};
+    loginRows = selUser ? app.db.loginHistory(selUser) : Rows{};
 }
 
 void AdminScreen::drawLists() {
     Ui& ui = app.ui;
     ui.text(L"Пользователи (ник / лучший счёт / игр)", 20, 45, 16, kGray);
-    ui.text(L"Рекорды выбранного (id / очки / время)", 460, 45, 16, kGray);
+    if (showLog) ui.text(sf::String(L"Журнал входов выбранного (последние ") + std::to_string(loginRows.size()) + L", UTC)", 460, 45, 16, kGray);
+    else ui.text(L"Рекорды выбранного (id / очки / время)", 460, 45, 16, kGray);
 
     // прокрутка колесом мыши: левая половина окна — пользователи, правая — рекорды
     if (ui.wheel != 0) (ui.wheelX < 450 ? scrollUsers : scrollGames) -= (int)ui.wheel;
     scrollUsers = std::max(0, std::min(scrollUsers, (int)users.size() - kVisibleRows));
-    scrollGames = std::max(0, std::min(scrollGames, (int)games.size() - kVisibleRows));
+    scrollGames = std::max(0, std::min(scrollGames, (int)(showLog ? loginRows.size() : games.size()) - kVisibleRows));
 
     for (int i = 0; i < kVisibleRows; i++) {
         size_t k = i + scrollUsers;
@@ -40,11 +47,23 @@ void AdminScreen::drawLists() {
         int id = std::stoi(users[k][0]);
         if (ui.rowBox(20, y, 420, id == selUser)) {  // выбор пользователя
             selUser = id; selGame = 0; scrollGames = 0;
-            games = app.db.adminGames(id);
+            loadDetails();
         }
         ui.text(users[k][1], 26, y + 2, 18);
         ui.text(users[k][2], 270, y + 2, 18);
         ui.text(users[k][3], 360, y + 2, 18);
+    }
+    if (showLog) {
+        // журнал входов: номер (1 - самый свежий вход) и дата-время
+        for (int i = 0; i < kVisibleRows; i++) {
+            size_t k = i + scrollGames;
+            if (k >= loginRows.size()) break;
+            float y = 70 + i * 30;
+            ui.rowBox(460, y, 420, false);  // только фон строки
+            ui.text(std::to_string(k + 1), 466, y + 2, 18);
+            ui.text(loginRows[k][1], 540, y + 2, 18);
+        }
+        return;
     }
     for (int i = 0; i < kVisibleRows; i++) {
         size_t k = i + scrollGames;
@@ -76,6 +95,7 @@ void AdminScreen::changePassword() {
 }
 
 void AdminScreen::changeScore() {
+    if (showLog) { app.setMessage(L"Сначала переключитесь на рекорды"); return; }
     int v = 0;
     if (!selGame) app.setMessage(L"Выберите рекорд");
     else if (!Validator::parseInt(valueA.text, v)) app.setMessage(L"Введите целое число ≥ 0");
@@ -83,6 +103,7 @@ void AdminScreen::changeScore() {
 }
 
 void AdminScreen::changeTime() {
+    if (showLog) { app.setMessage(L"Сначала переключитесь на рекорды"); return; }
     int v = 0;
     if (!selGame) app.setMessage(L"Выберите рекорд");
     else if (!Validator::parseInt(valueA.text, v)) app.setMessage(L"Введите целое число секунд ≥ 0");
@@ -107,7 +128,7 @@ void AdminScreen::createUser() {
         if (users[i][1] == valueA.text) {
             selUser = std::stoi(users[i][0]);
             selGame = 0;
-            games = app.db.adminGames(selUser);
+            loadDetails();
             if ((int)i >= scrollUsers + kVisibleRows) scrollUsers = (int)i - kVisibleRows + 1;
         }
 }
@@ -150,12 +171,18 @@ void AdminScreen::drawControls() {
 
     // удаление и выход
     if (ui.button(L"Удалить рекорд", 20, 602, 180, 34)) {
-        if (!selGame) app.setMessage(L"Выберите рекорд");
+        if (showLog) app.setMessage(L"Сначала переключитесь на рекорды");
+        else if (!selGame) app.setMessage(L"Выберите рекорд");
         else { app.db.deleteGame(selGame); app.setMessage(L"Рекорд удалён", false); reload(); }
     }
     if (ui.button(L"Удалить пользователя", 210, 602, 245, 34)) {
         if (!selUser) app.setMessage(L"Выберите пользователя");
         else { app.db.deleteUser(selUser); app.setMessage(L"Пользователь удалён", false); reload(); }
+    }
+    // переключатель правой таблицы: рекорды <-> журнал входов выбранного пользователя
+    if (ui.button(showLog ? L"Показать рекорды" : L"Журнал входов", 465, 602, 215, 34)) {
+        showLog = !showLog;
+        scrollGames = 0;
     }
     if (ui.button(L"Выйти из аккаунта", 690, 602, 200, 34)) app.logout();
     app.drawMessage(20, 654);

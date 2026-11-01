@@ -44,6 +44,7 @@ public:
     // --- администратор ---
     Rows adminUsers();                // [id, ник, лучший счёт, число игр]
     Rows adminGames(int userId);      // [id, очки, время]
+    Rows loginHistory(int userId);    // [id, время входа] — последние 200 входов, новые сверху
     bool updateNick(int userId, const std::string& nick);  // false, если ник занят
     bool setPassword(int userId, const std::string& pass);  // новый пароль пользователя
     void updateScore(int gameId, int score);

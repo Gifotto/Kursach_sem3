@@ -114,6 +114,13 @@ Rows Database::adminGames(int userId) {
     return r;
 }
 
+Rows Database::loginHistory(int userId) {
+    Rows r;
+    query("SELECT id, to_char(logged_at,'YYYY-MM-DD HH24:MI:SS') FROM login_history "
+          "WHERE user_id=$1 ORDER BY logged_at DESC, id DESC LIMIT 200", {to_string(userId)}, &r);
+    return r;
+}
+
 bool Database::updateNick(int userId, const string& nick) {
     return query("UPDATE users SET nickname=$1 WHERE id=$2", {nick, to_string(userId)});
 }
